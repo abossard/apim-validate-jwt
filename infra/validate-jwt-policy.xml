@@ -5,6 +5,9 @@
             <issuer-signing-keys>
                 <key>{{validate-jwt-signing-key-base64}}</key>
             </issuer-signing-keys>
+            <decryption-keys>
+                <key>{{validate-jwt-encryption-key-base64}}</key>
+            </decryption-keys>
             <audiences>
                 <audience>{{validate-jwt-audience}}</audience>
             </audiences>
@@ -16,9 +19,6 @@
                     <value>{{validate-jwt-required-scope}}</value>
                 </claim>
             </required-claims>
-            <decryption-keys>
-                <key>{{validate-jwt-encryption-key-base64}}</key>
-            </decryption-keys>
         </validate-jwt>
         <!-- Proceed with the request after successful JWT validation -->
     </inbound>

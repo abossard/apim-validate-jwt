@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -32,33 +36,95 @@ resource "random_string" "salt" {
   numeric = true  # Updated from 'number' to 'numeric' as per recommendation
 }
 
-# Generate a random string for JWT key IDs
-resource "random_string" "signing_key_id" {
-  length  = 16
-  special = false
-  upper   = true
-  lower   = true
-  numeric = true
+# Key identifiers for JWT signing and encryption keys
+locals {
+  jwt_signing_key_id    = "jwt-signing-key-1"
+  jwt_encryption_key_id = "jwt-encryption-key-1"
+  keys_directory        = "${path.module}/keys"
 }
 
-resource "random_string" "encryption_key_id" {
-  length  = 16
-  special = false
-  upper   = true
-  lower   = true
-  numeric = true
+# Create directory for keys if it doesn't exist
+resource "null_resource" "create_keys_directory" {
+  provisioner "local-exec" {
+    command = "mkdir -p ${local.keys_directory}"
+  }
 }
 
-# Generate RSA key pair for JWT signing
-resource "tls_private_key" "jwt_signing_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
+# Generate RSA key pair for JWT signing using OpenSSL
+resource "null_resource" "generate_jwt_signing_keys" {
+  depends_on = [null_resource.create_keys_directory]
+  
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Generate private key
+      openssl genpkey -algorithm RSA -out ${local.keys_directory}/jwt_signing_private.pem -pkeyopt rsa_keygen_bits:2048
+      
+      # Extract public key
+      openssl rsa -pubout -in ${local.keys_directory}/jwt_signing_private.pem -out ${local.keys_directory}/jwt_signing_public.pem
+      
+      # Base64 encode the keys (remove headers and newlines for APIM usage)
+      cat ${local.keys_directory}/jwt_signing_public.pem | grep -v "BEGIN PUBLIC KEY" | grep -v "END PUBLIC KEY" | tr -d '\n' > ${local.keys_directory}/jwt_signing_public_base64.txt
+    EOT
+  }
+
+  # Trigger recreation when key ID changes
+  triggers = {
+    key_id = local.jwt_signing_key_id
+  }
 }
 
-# Generate RSA key pair for JWT encryption 
-resource "tls_private_key" "jwt_encryption_key" {
-  algorithm = "RSA"
-  rsa_bits  = 2048
+# Generate RSA key pair for JWT encryption using OpenSSL
+resource "null_resource" "generate_jwt_encryption_keys" {
+  depends_on = [null_resource.create_keys_directory]
+  
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Generate private key
+      openssl genpkey -algorithm RSA -out ${local.keys_directory}/jwt_encryption_private.pem -pkeyopt rsa_keygen_bits:2048
+      
+      # Extract public key
+      openssl rsa -pubout -in ${local.keys_directory}/jwt_encryption_private.pem -out ${local.keys_directory}/jwt_encryption_public.pem
+      
+      # Base64 encode the private key (remove headers and newlines for APIM usage)
+      cat ${local.keys_directory}/jwt_encryption_private.pem | grep -v "BEGIN RSA PRIVATE KEY" | grep -v "END RSA PRIVATE KEY" | tr -d '\n' > ${local.keys_directory}/jwt_encryption_private_base64.txt
+    EOT
+  }
+
+  # Trigger recreation when key ID changes
+  triggers = {
+    key_id = local.jwt_encryption_key_id
+  }
+}
+
+# Read the generated key files
+data "local_file" "jwt_signing_private_key" {
+  depends_on = [null_resource.generate_jwt_signing_keys]
+  filename   = "${local.keys_directory}/jwt_signing_private.pem"
+}
+
+data "local_file" "jwt_signing_public_key" {
+  depends_on = [null_resource.generate_jwt_signing_keys]
+  filename   = "${local.keys_directory}/jwt_signing_public.pem"
+}
+
+data "local_file" "jwt_signing_public_key_base64" {
+  depends_on = [null_resource.generate_jwt_signing_keys]
+  filename   = "${local.keys_directory}/jwt_signing_public_base64.txt"
+}
+
+data "local_file" "jwt_encryption_private_key" {
+  depends_on = [null_resource.generate_jwt_encryption_keys]
+  filename   = "${local.keys_directory}/jwt_encryption_private.pem"
+}
+
+data "local_file" "jwt_encryption_public_key" {
+  depends_on = [null_resource.generate_jwt_encryption_keys]
+  filename   = "${local.keys_directory}/jwt_encryption_public.pem"
+}
+
+data "local_file" "jwt_encryption_private_key_base64" {
+  depends_on = [null_resource.generate_jwt_encryption_keys]
+  filename   = "${local.keys_directory}/jwt_encryption_private_base64.txt"
 }
 
 variable "salt" {
@@ -154,28 +220,28 @@ resource "azurerm_key_vault_secret" "salt" {
   key_vault_id = azurerm_key_vault.kv.id
 }
 
-# Store keys in Key Vault
+# Store keys in Key Vault with clear labeling
 resource "azurerm_key_vault_secret" "jwt_signing_private_key" {
   name         = "jwt-signing-private-key"
-  value        = tls_private_key.jwt_signing_key.private_key_pem
+  value        = data.local_file.jwt_signing_private_key.content
   key_vault_id = azurerm_key_vault.kv.id
 }
 
 resource "azurerm_key_vault_secret" "jwt_signing_public_key" {
   name         = "jwt-signing-public-key"
-  value        = tls_private_key.jwt_signing_key.public_key_pem
+  value        = data.local_file.jwt_signing_public_key.content
   key_vault_id = azurerm_key_vault.kv.id
 }
 
 resource "azurerm_key_vault_secret" "jwt_encryption_private_key" {
   name         = "jwt-encryption-private-key"
-  value        = tls_private_key.jwt_encryption_key.private_key_pem
+  value        = data.local_file.jwt_encryption_private_key.content
   key_vault_id = azurerm_key_vault.kv.id
 }
 
 resource "azurerm_key_vault_secret" "jwt_encryption_public_key" {
   name         = "jwt-encryption-public-key"
-  value        = tls_private_key.jwt_encryption_key.public_key_pem
+  value        = data.local_file.jwt_encryption_public_key.content
   key_vault_id = azurerm_key_vault.kv.id
 }
 
@@ -189,7 +255,7 @@ resource "azurerm_api_management_product" "hello_product" {
   resource_group_name   = azurerm_resource_group.rg.name
   display_name          = "Hello World API Product"
   description           = "A product containing a simple Hello World API"
-  subscription_required = true
+  subscription_required = false
   published             = true
 }
 
@@ -274,7 +340,7 @@ resource "azurerm_api_management_named_value" "jwt_enc_key_id" {
   resource_group_name = azurerm_resource_group.rg.name
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-enc-key-id"
-  value               = random_string.encryption_key_id.result
+  value               = local.jwt_encryption_key_id
 }
 
 resource "azurerm_api_management_named_value" "jwt_signing_key_id" {
@@ -282,7 +348,7 @@ resource "azurerm_api_management_named_value" "jwt_signing_key_id" {
   resource_group_name = azurerm_resource_group.rg.name
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-signing-key-id"
-  value               = random_string.signing_key_id.result
+  value               = local.jwt_signing_key_id
 }
 
 resource "azurerm_api_management_named_value" "jwt_encryption_key" {
@@ -314,15 +380,7 @@ resource "azurerm_api_management_named_value" "jwt_signing_key_base64" {
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-signing-key-base64"
   secret              = true
-  value               = base64encode(
-                          replace(
-                            replace(
-                              tls_private_key.jwt_signing_key.public_key_pem,
-                              "-----BEGIN PUBLIC KEY-----\n", ""
-                            ),
-                            "\n-----END PUBLIC KEY-----\n", ""
-                          )
-                        )
+  value               = data.local_file.jwt_signing_public_key_base64.content
 }
 
 resource "azurerm_api_management_named_value" "jwt_encryption_key_base64" {
@@ -331,15 +389,7 @@ resource "azurerm_api_management_named_value" "jwt_encryption_key_base64" {
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-encryption-key-base64"
   secret              = true
-  value               = base64encode(
-                          replace(
-                            replace(
-                              tls_private_key.jwt_encryption_key.private_key_pem,
-                              "-----BEGIN RSA PRIVATE KEY-----\n", ""
-                            ),
-                            "\n-----END RSA PRIVATE KEY-----\n", ""
-                          )
-                        )
+  value               = data.local_file.jwt_encryption_private_key_base64.content
 }
 
 # Create a secure API with JWT validation
@@ -351,7 +401,7 @@ resource "azurerm_api_management_api" "secure_api" {
   display_name        = "Secure API with JWT Validation"
   path                = "secure"
   protocols           = ["https"]
-  subscription_required = true
+  subscription_required = false
 }
 
 # Create a GET operation in the secure API
@@ -373,16 +423,6 @@ resource "azurerm_api_management_api_policy" "secure_api_policy" {
   resource_group_name = azurerm_resource_group.rg.name
   
   xml_content = file("${path.module}/validate-jwt-policy.xml")
-}
-
-# Apply specific policy to the secure data operation
-resource "azurerm_api_management_api_operation_policy" "secure_data_policy" {
-  api_name            = azurerm_api_management_api.secure_api.name
-  api_management_name = azurerm_api_management.apim.name
-  resource_group_name = azurerm_resource_group.rg.name
-  operation_id        = azurerm_api_management_api_operation.secure_get_operation.operation_id
-  
-  xml_content = file("${path.module}/secure-data-policy.xml")
 }
 
 # Associate the secure API with the product
@@ -421,13 +461,13 @@ output "subscription_key" {
 
 output "public_signing_key" {
   description = "Public signing key for JWT token validation (for reference)"
-  value       = tls_private_key.jwt_signing_key.public_key_pem
+  value       = data.local_file.jwt_signing_public_key.content
   sensitive   = true
 }
 
 output "public_encryption_key" {
   description = "Public encryption key for JWT token encryption (for reference)"
-  value       = tls_private_key.jwt_encryption_key.public_key_pem
+  value       = data.local_file.jwt_encryption_public_key.content
   sensitive   = true
 }
 
@@ -438,7 +478,23 @@ output "jwt_requirements" {
     issuer     = azurerm_api_management_named_value.jwt_issuer.value
     audience   = azurerm_api_management_named_value.jwt_audience.value
     scope      = azurerm_api_management_named_value.jwt_required_scope.value
-    signing_kid = random_string.signing_key_id.result
-    enc_kid     = random_string.encryption_key_id.result
+    signing_kid = local.jwt_signing_key_id
+    enc_kid     = local.jwt_encryption_key_id
   }
+}
+
+# Output local file paths for keys
+output "local_keys_directory" {
+  description = "Directory containing locally generated keys"
+  value       = local.keys_directory
+}
+
+output "local_key_files" {
+  description = "List of locally generated key files"
+  value = [
+    "${local.keys_directory}/jwt_signing_private.pem",
+    "${local.keys_directory}/jwt_signing_public.pem",
+    "${local.keys_directory}/jwt_encryption_private.pem",
+    "${local.keys_directory}/jwt_encryption_public.pem"
+  ]
 }

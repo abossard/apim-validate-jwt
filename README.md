@@ -24,8 +24,64 @@ This repository demonstrates how to implement secure JWT (JSON Web Token) valida
     ├── hello-world-policy.xml  # Simple policy for basic API operations
     ├── main.tf                 # Terraform configuration file
     ├── secure-data-policy.xml  # JWT validation policy for secure API operations
-    └── validate-jwt-policy.xml # Base JWT validation policy
+    ├── validate-jwt-policy.xml # Base JWT validation policy
+    └── keys/                   # Directory where generated keys are stored locally
+        ├── jwt_signing_private.pem        # Private key for JWT signing
+        ├── jwt_signing_public.pem         # Public key for JWT signature validation
+        ├── jwt_signing_public_base64.txt  # Base64 encoded public signing key
+        ├── jwt_encryption_private.pem     # Private key for JWT decryption
+        ├── jwt_encryption_public.pem      # Public key for JWT encryption
+        └── jwt_encryption_private_base64.txt # Base64 encoded private encryption key
 ```
+
+## 🔑 Key Generation and Storage
+
+### Generated Keys
+
+This solution generates two RSA key pairs (2048-bit) during deployment:
+
+1. **JWT Signing Key Pair**:
+   - **Private Key**: Used by token issuers to sign JWTs
+   - **Public Key**: Used by API Management to verify JWT signatures
+   - **Key ID**: Configured as `jwt-signing-key-1`
+
+2. **JWT Encryption Key Pair**:
+   - **Public Key**: Used by token issuers to encrypt JWTs (creating JWE tokens)
+   - **Private Key**: Used by API Management to decrypt incoming JWE tokens
+   - **Key ID**: Configured as `jwt-encryption-key-1`
+
+### Key Storage Locations
+
+Keys are stored in multiple locations for different purposes:
+
+1. **Local Storage**: 
+   - All keys are generated and stored in the `infra/keys/` directory
+   - These local keys can be used by developers to generate valid test tokens
+   - Base64-encoded versions (without headers/footers) are also created for easy use in APIM policies
+
+2. **Azure Key Vault**:
+   - All keys are securely stored in Azure Key Vault
+   - Key Vault name format: `{resource_prefix}-kv`
+   - Secret names:
+     - `jwt-signing-private-key`
+     - `jwt-signing-public-key`
+     - `jwt-encryption-private-key`
+     - `jwt-encryption-public-key`
+
+3. **API Management Named Values**:
+   - Keys are referenced in API Management as named values
+   - These named values are used in the JWT validation policies
+   - Named value names:
+     - `validate-jwt-signing-key`
+     - `validate-jwt-signing-key-base64`
+     - `validate-jwt-encryption-key`
+     - `validate-jwt-encryption-key-base64`
+
+### Key Usage in API Management
+
+- The public signing key is used in the `<issuer-signing-keys>` section of the validate-jwt policy
+- The private encryption key is used in the `<decryption-keys>` section of the validate-jwt policy
+- Keys are referenced using their Key IDs, which match the values stored in named values
 
 ## 🔧 Implementation Details
 
@@ -79,6 +135,13 @@ To test the secure API, you'll need to:
 1. Generate a valid JWT token with the required claims
 2. Use the provided curl command, replacing `YOUR_JWT_TOKEN` with your actual token
 3. Include the subscription key in the request
+
+### Creating Test Tokens
+
+You can use the locally generated keys in the `infra/keys/` directory to create test tokens:
+- Use `jwt_signing_private.pem` to sign your tokens
+- Use `jwt_encryption_public.pem` to encrypt your tokens (if testing JWE)
+- Ensure your tokens include the required claims as specified in the terraform outputs
 
 ## 📝 Policy Details
 
