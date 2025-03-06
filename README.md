@@ -24,7 +24,6 @@ This repository demonstrates how to implement secure JWT (JSON Web Token) valida
     ├── hello-world-policy.xml  # Simple policy for basic API operations
     ├── main.tf                 # Terraform configuration file
     ├── secure-data-policy.xml  # JWT validation policy for secure API operations
-    ├── terraform.tfstate       # Terraform state files
     └── validate-jwt-policy.xml # Base JWT validation policy
 ```
 
