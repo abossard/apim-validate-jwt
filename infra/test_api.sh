@@ -58,9 +58,9 @@ echo -e "\n"
 
 # ===== STEP 1: Test the Hello World API =====
 echo -e "${YELLOW}Testing Hello World API...${NC}"
-echo -e "GET https://$GATEWAY_URL/hello\n"
+echo -e "GET $GATEWAY_URL/hello\n"
 
-HELLO_RESPONSE=$(curl -s -X GET "https://$GATEWAY_URL/hello")
+HELLO_RESPONSE=$(curl -s -X GET "$GATEWAY_URL/hello")
 
 echo -e "${GREEN}Response:${NC}"
 echo "$HELLO_RESPONSE" | jq . || echo "$HELLO_RESPONSE"
@@ -150,9 +150,9 @@ echo -e "Token saved to /tmp/jwt_token.txt for reference\n"
 
 # ===== STEP 3: Test the Secure API with JWT Token =====
 echo -e "${YELLOW}Testing Secure API with JWT Token...${NC}"
-echo -e "GET https://$GATEWAY_URL/secure/data\n"
+echo -e "GET $GATEWAY_URL/secure/data\n"
 
-SECURE_RESPONSE=$(curl -s -X GET "https://$GATEWAY_URL/secure/data" \
+SECURE_RESPONSE=$(curl -s -X GET "$GATEWAY_URL/secure/data" \
   -H "Authorization: Bearer $JWT_TOKEN")
 
 echo -e "${GREEN}Response:${NC}"
@@ -175,9 +175,9 @@ TAMPERED_SIGNATURE=$(echo -n "$TAMPERED_UNSIGNED_TOKEN" | openssl dgst -sha256 -
 # Create the tampered JWT token
 TAMPERED_JWT_TOKEN="$TAMPERED_UNSIGNED_TOKEN.$TAMPERED_SIGNATURE"
 
-echo -e "GET https://$GATEWAY_URL/secure/data with tampered token\n"
+echo -e "GET $GATEWAY_URL/secure/data with tampered token\n"
 
-INVALID_RESPONSE=$(curl -s -X GET "https://$GATEWAY_URL/secure/data" \
+INVALID_RESPONSE=$(curl -s -X GET "$GATEWAY_URL/secure/data" \
   -H "Authorization: Bearer $TAMPERED_JWT_TOKEN")
 
 echo -e "${RED}Expected Error Response:${NC}"
