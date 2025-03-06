@@ -21,6 +21,13 @@
             </required-claims>
         </validate-jwt>
         <!-- Proceed with the request after successful JWT validation -->
+        <return-response>
+            <set-status code="200" reason="OK" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-body>{"message": "Hello Secure World"}</set-body>
+        </return-response>
     </inbound>
     <backend>
         <base />

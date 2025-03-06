@@ -15,6 +15,7 @@ This repository demonstrates how to implement secure JWT (JSON Web Token) valida
   - `issuers` - For validating the token issuer
   - `required-claims` - For ensuring specific claims are present
   - `decryption-keys` - For handling encrypted JWE tokens
+- 🧪 Automated testing script for validating API endpoints and JWT token handling
 
 ## 📋 Repository Structure
 
@@ -23,6 +24,8 @@ This repository demonstrates how to implement secure JWT (JSON Web Token) valida
 └── infra/                      # Infrastructure code directory
     ├── hello-world-policy.xml  # Simple policy for basic API operations
     ├── main.tf                 # Terraform configuration file
+    ├── shell.tf                # Test script generation for API endpoints
+    ├── test_api.sh             # Generated test script (after terraform apply)
     ├── secure-data-policy.xml  # JWT validation policy for secure API operations
     ├── validate-jwt-policy.xml # Base JWT validation policy
     └── keys/                   # Directory where generated keys are stored locally
@@ -109,6 +112,7 @@ The demo provides two APIs:
 - Azure subscription
 - Terraform installed
 - Azure CLI installed and authenticated
+- For testing: jq and openssl (used by the generated test script)
 
 ### Deployment Steps
 
@@ -122,18 +126,34 @@ The demo provides two APIs:
    ```
    terraform apply
    ```
-5. After deployment, Terraform will output:
-   - A curl command for testing the Hello API
-   - A curl command for testing the Secure API (requires a valid JWT)
-   - The subscription key for API access
-   - JWT requirements for token generation
+5. After deployment, Terraform will:
+   - Output commands for testing the APIs
+   - Generate and run a test script that automatically tests both APIs
+   - Create the required keys in the `keys` directory
 
 ## 🧪 Testing
 
-To test the secure API, you'll need to:
+### Automated Testing
+
+The deployment automatically generates and runs a test script (`test_api.sh`) that:
+
+1. Tests the Hello World API endpoint
+2. Generates a valid JWT token using the locally stored signing key
+3. Tests the Secure API with the generated token
+4. Tests the Secure API with a tampered token to verify validation works
+
+You can run this script again at any time:
+
+```bash
+./infra/test_api.sh
+```
+
+### Manual Testing
+
+To test the secure API manually, you'll need to:
 
 1. Generate a valid JWT token with the required claims
-2. Use the provided curl command, replacing `YOUR_JWT_TOKEN` with your actual token
+2. Use the provided curl command from the Terraform outputs
 3. Include the subscription key in the request
 
 ### Creating Test Tokens
@@ -141,7 +161,10 @@ To test the secure API, you'll need to:
 You can use the locally generated keys in the `infra/keys/` directory to create test tokens:
 - Use `jwt_signing_private.pem` to sign your tokens
 - Use `jwt_encryption_public.pem` to encrypt your tokens (if testing JWE)
-- Ensure your tokens include the required claims as specified in the terraform outputs
+- Ensure your tokens include the required claims:
+  - issuer: Value from `validate-jwt-issuer` named value
+  - audience: Value from `validate-jwt-audience` named value
+  - scope: Value from `validate-jwt-required-scope` named value
 
 ## 📝 Policy Details
 
