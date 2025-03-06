@@ -83,7 +83,7 @@ fi
 # Create header and payload files
 JWT_HEADER=$(cat <<EOF
 {
-  "alg": "RS256",
+  "alg": "HS256",
   "typ": "JWT",
   "kid": "$JWT_SIGNING_KEY_ID"
 }
@@ -120,22 +120,20 @@ PAYLOAD_BASE64=$(echo -n "$JWT_PAYLOAD" | base64 | tr -d '=' | tr '/+' '_-' | tr
 # Combine header and payload to form the data to sign
 UNSIGNED_TOKEN="$HEADER_BASE64.$PAYLOAD_BASE64"
 
-# Sign the token
-PRIVATE_KEY_PATH="$KEYS_DIR/jwt_signing_private.pem"
+# Load symmetric signing key
+SYMMETRIC_KEY_PATH="$KEYS_DIR/jwt_signing_key.txt"
 
-if [ ! -f "$PRIVATE_KEY_PATH" ]; then
-    echo -e "${RED}Error: Private signing key not found at $PRIVATE_KEY_PATH${NC}"
-    echo -e "${YELLOW}Checking for keys in current directory...${NC}"
-    PRIVATE_KEY_PATH="./jwt_signing_private.pem"
-    if [ ! -f "$PRIVATE_KEY_PATH" ]; then
-        echo -e "${RED}Error: Private signing key not found in current directory either.${NC}"
-        echo -e "${YELLOW}Please specify the correct path to the jwt_signing_private.pem file.${NC}"
-        exit 1
-    fi
+if [ ! -f "$SYMMETRIC_KEY_PATH" ]; then
+    echo -e "${RED}Error: Symmetric signing key not found at $SYMMETRIC_KEY_PATH${NC}"
+    exit 1
 fi
 
-echo "Using signing key: $PRIVATE_KEY_PATH"
-SIGNATURE=$(echo -n "$UNSIGNED_TOKEN" | openssl dgst -sha256 -sign "$PRIVATE_KEY_PATH" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+SYMMETRIC_KEY=$(cat "$SYMMETRIC_KEY_PATH")
+
+echo "Using symmetric signing key: $SYMMETRIC_KEY_PATH"
+
+# Sign the token using HMAC SHA-256
+SIGNATURE=$(echo -n "$UNSIGNED_TOKEN" | openssl dgst -sha256 -hmac "$SYMMETRIC_KEY" -binary | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
 # Create the complete JWT token
 JWT_TOKEN="$UNSIGNED_TOKEN.$SIGNATURE"
@@ -170,7 +168,7 @@ TAMPERED_PAYLOAD_BASE64=$(echo -n "$TAMPERED_PAYLOAD" | base64 | tr -d '=' | tr 
 TAMPERED_UNSIGNED_TOKEN="$HEADER_BASE64.$TAMPERED_PAYLOAD_BASE64"
 
 # Sign with the same key (simulating a properly signed but tampered token)
-TAMPERED_SIGNATURE=$(echo -n "$TAMPERED_UNSIGNED_TOKEN" | openssl dgst -sha256 -sign "$PRIVATE_KEY_PATH" | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
+TAMPERED_SIGNATURE=$(echo -n "$TAMPERED_UNSIGNED_TOKEN" | openssl dgst -sha256 -hmac "$SYMMETRIC_KEY" -binary | base64 | tr -d '=' | tr '/+' '_-' | tr -d '\n')
 
 # Create the tampered JWT token
 TAMPERED_JWT_TOKEN="$TAMPERED_UNSIGNED_TOKEN.$TAMPERED_SIGNATURE"

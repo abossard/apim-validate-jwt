@@ -4,7 +4,7 @@
         <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
             <issuer-signing-keys>
                 <!-- Using a symmetric key instead of RSA -->
-                <key id="jwt-signing-key-1" secret="true">{{validate-jwt-signing-key-base64}}</key>
+                <key id="jwt-signing-key-1">{{validate-jwt-signing-key-base64}}</key>
             </issuer-signing-keys>
             <decryption-keys>
                 <key>{{validate-jwt-encryption-key-base64}}</key>
