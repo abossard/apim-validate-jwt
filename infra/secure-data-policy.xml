@@ -1,0 +1,41 @@
+<policies>
+    <inbound>
+        <base />
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid.">
+            <issuer-signing-keys>
+                <key>{{validate-jwt-signing-key-base64}}</key>
+            </issuer-signing-keys>
+            <audiences>
+                <audience>{{validate-jwt-audience}}</audience>
+            </audiences>
+            <issuers>
+                <issuer>{{validate-jwt-issuer}}</issuer>
+            </issuers>
+            <required-claims>
+                <claim name="scope" match="all">
+                    <value>{{validate-jwt-required-scope}}</value>
+                </claim>
+            </required-claims>
+            <!-- <decryption-keys>
+                <key>{{validate-jwt-encryption-key-base64}}</key>
+            </decryption-keys> -->
+        </validate-jwt>
+        <!-- Return immediately with data after successful JWT validation -->
+        <return-response>
+            <set-status code="200" reason="OK" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-body>{"message": "Secure data accessed successfully", "data": {"items": [{"id": 1, "name": "Item 1"}, {"id": 2, "name": "Item 2"}, {"id": 3, "name": "Item 3"}], "timestamp": "@(DateTime.UtcNow.ToString("o"))"} }</set-body>
+        </return-response>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>
