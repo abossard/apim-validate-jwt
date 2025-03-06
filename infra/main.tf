@@ -340,7 +340,7 @@ resource "azurerm_api_management_named_value" "jwt_signing_key_base64" {
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-signing-key-base64"
   secret              = true
-  value               = random_string.jwt_signing_key.result
+  value               = base64encode(random_string.jwt_signing_key.result)
 }
 
 # Create a secure API with JWT validation
