@@ -59,27 +59,13 @@ resource "random_string" "jwt_signing_key" {
   numeric = true
 }
 
-# Generate RSA key pair for JWT encryption using OpenSSL (keeping this asymmetric)
-resource "null_resource" "generate_jwt_encryption_keys" {
-  depends_on = [null_resource.create_keys_directory]
-  
-  provisioner "local-exec" {
-    command = <<-EOT
-      # Generate private key
-      openssl genpkey -algorithm RSA -out ${local.keys_directory}/jwt_encryption_private.pem -pkeyopt rsa_keygen_bits:2048
-      
-      # Extract public key
-      openssl rsa -pubout -in ${local.keys_directory}/jwt_encryption_private.pem -out ${local.keys_directory}/jwt_encryption_public.pem
-      
-      # Base64 encode the private key (remove headers and newlines for APIM usage)
-      cat ${local.keys_directory}/jwt_encryption_private.pem | grep -v "BEGIN RSA PRIVATE KEY" | grep -v "END RSA PRIVATE KEY" | tr -d '\n' > ${local.keys_directory}/jwt_encryption_private_base64.txt
-    EOT
-  }
-
-  # Trigger recreation when key ID changes
-  triggers = {
-    key_id = local.jwt_encryption_key_id
-  }
+# Generate symmetric key for JWT encryption
+resource "random_string" "jwt_encryption_key" {
+  length  = 64
+  special = false  # No special characters in the symmetric key
+  upper   = true
+  lower   = true
+  numeric = true
 }
 
 # Save the symmetric signing key to a file
@@ -89,20 +75,11 @@ resource "local_file" "jwt_signing_key_file" {
   filename   = "${local.keys_directory}/jwt_signing_key.txt"
 }
 
-# Read the generated encryption key files
-data "local_file" "jwt_encryption_private_key" {
-  depends_on = [null_resource.generate_jwt_encryption_keys]
-  filename   = "${local.keys_directory}/jwt_encryption_private.pem"
-}
-
-data "local_file" "jwt_encryption_public_key" {
-  depends_on = [null_resource.generate_jwt_encryption_keys]
-  filename   = "${local.keys_directory}/jwt_encryption_public.pem"
-}
-
-data "local_file" "jwt_encryption_private_key_base64" {
-  depends_on = [null_resource.generate_jwt_encryption_keys]
-  filename   = "${local.keys_directory}/jwt_encryption_private_base64.txt"
+# Save the symmetric encryption key to a file
+resource "local_file" "jwt_encryption_key_file" {
+  depends_on = [null_resource.create_keys_directory]
+  content    = random_string.jwt_encryption_key.result
+  filename   = "${local.keys_directory}/jwt_encryption_key.txt"
 }
 
 variable "salt" {
@@ -137,6 +114,7 @@ resource "azurerm_resource_group" "rg" {
   tags = {
     Environment = "Dev"
     Project     = "APIM JWT Validation"
+    SecurityControl = "Ignore"
   }
 }
 
@@ -160,7 +138,7 @@ resource "azurerm_key_vault" "kv" {
   name                        = "${var.resource_prefix}-kv"
   location                    = azurerm_resource_group.rg.location
   resource_group_name         = azurerm_resource_group.rg.name
-  enabled_for_disk_encryption = true
+  enabled_for_disk_encryption = false
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   soft_delete_retention_days  = 7
   purge_protection_enabled    = false
@@ -176,7 +154,7 @@ resource "azurerm_key_vault" "kv" {
     ]
     
     secret_permissions = [
-      "Get", "List", "Set", "Delete",
+      "Get", "List", "Set", "Delete","Purge"
     ]
   }
 
@@ -189,6 +167,7 @@ resource "azurerm_key_vault" "kv" {
       "Get", "List",
     ]
   }
+  public_network_access_enabled = true
 }
 
 # Store salt in Key Vault
@@ -205,16 +184,10 @@ resource "azurerm_key_vault_secret" "jwt_signing_key" {
   key_vault_id = azurerm_key_vault.kv.id
 }
 
-# Store encryption keys in Key Vault with clear labeling
-resource "azurerm_key_vault_secret" "jwt_encryption_private_key" {
-  name         = "jwt-encryption-private-key"
-  value        = data.local_file.jwt_encryption_private_key.content
-  key_vault_id = azurerm_key_vault.kv.id
-}
-
-resource "azurerm_key_vault_secret" "jwt_encryption_public_key" {
-  name         = "jwt-encryption-public-key"
-  value        = data.local_file.jwt_encryption_public_key.content
+# Store symmetric encryption key in Key Vault
+resource "azurerm_key_vault_secret" "jwt_encryption_key" {
+  name         = "jwt-encryption-key"
+  value        = random_string.jwt_encryption_key.result
   key_vault_id = azurerm_key_vault.kv.id
 }
 
@@ -330,7 +303,7 @@ resource "azurerm_api_management_named_value" "jwt_encryption_key_base64" {
   api_management_name = azurerm_api_management.apim.name
   display_name        = "validate-jwt-encryption-key-base64"
   secret              = true
-  value               = data.local_file.jwt_encryption_private_key_base64.content
+  value               = base64encode(random_string.jwt_encryption_key.result)
 }
 
 # Create named value with symmetric key for JWT signing
@@ -416,9 +389,9 @@ output "symmetric_signing_key" {
   sensitive   = true
 }
 
-output "public_encryption_key" {
-  description = "Public encryption key for JWT token encryption (for reference)"
-  value       = data.local_file.jwt_encryption_public_key.content
+output "symmetric_encryption_key" {
+  description = "Symmetric key for JWT token encryption (for reference)"
+  value       = random_string.jwt_encryption_key.result
   sensitive   = true
 }
 
@@ -444,7 +417,6 @@ output "local_key_files" {
   description = "List of locally generated key files"
   value = [
     "${local.keys_directory}/jwt_signing_key.txt",
-    "${local.keys_directory}/jwt_encryption_private.pem",
-    "${local.keys_directory}/jwt_encryption_public.pem"
+    "${local.keys_directory}/jwt_encryption_key.txt"
   ]
 }
