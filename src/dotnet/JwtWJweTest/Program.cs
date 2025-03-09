@@ -1,13 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 
 
 static string Base64UrlEncode(byte[] input)
@@ -254,6 +257,84 @@ async Task MainAsync(string[] args)
     Console.WriteLine();
     
     Console.ForegroundColor = ConsoleColor.Blue;
+    // ===== STEP 5: Test the Secure API with a JWE Token =====
+    Console.ForegroundColor = ConsoleColor.Yellow;
+    Console.WriteLine("Testing Secure API with JWE Token...");
+    Console.ResetColor();
+
+    // Load the symmetric encryption key from keysDir/jwt_encryption_key.txt
+    string encryptionKeyPath = Path.Combine(keysDir, "jwt_encryption_key.txt");
+    if (!File.Exists(encryptionKeyPath))
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Error: Encryption key not found at {encryptionKeyPath}");
+        Console.ResetColor();
+        return;
+    }// Replace the existing encryption key handling in the JWE test section with the following code:
+
+string encryptionKey = File.ReadAllText(encryptionKeyPath).Trim();
+// Convert the 64-character random string into bytes (UTF8)
+byte[] fullKeyBytes = Encoding.UTF8.GetBytes(encryptionKey);
+// Derive a 16-byte key from the full key bytes using SHA256
+byte[] encryptionKeyBytes;
+using (var sha256 = SHA256.Create())
+{
+    var hash = sha256.ComputeHash(fullKeyBytes);
+    encryptionKeyBytes = new byte[16];
+    Array.Copy(hash, encryptionKeyBytes, 16);
+}
+var encryptionSecurityKey = new SymmetricSecurityKey(encryptionKeyBytes);
+
+    // Create encrypting credentials (using AES128KW and AES128CBC-HMAC-SHA256)
+    var encryptingCredentials = new EncryptingCredentials(
+        encryptionSecurityKey, 
+        SecurityAlgorithms.Aes128KW, 
+        SecurityAlgorithms.Aes128CbcHmacSha256);
+
+    // Create a token descriptor for the JWE token with minimal claims
+    var jweDescriptor = new SecurityTokenDescriptor
+    {
+        Issuer = issuer,
+        Audience = audience,
+        Subject = new ClaimsIdentity(new[]
+        {
+            new Claim("sub", "test-user"),
+            new Claim("scope", scope)
+        }),
+        Expires = DateTime.UtcNow.AddHours(1),
+        EncryptingCredentials = encryptingCredentials
+    };
+
+    // Create and write the JWE token
+    var tokenHandlerJWE = new JwtSecurityTokenHandler();
+    var securityTokenJWE = tokenHandlerJWE.CreateToken(jweDescriptor);
+    string jweToken = tokenHandlerJWE.WriteToken(securityTokenJWE);
+
+    Console.ForegroundColor = ConsoleColor.Green;
+    Console.WriteLine("Generated JWE Token:");
+    Console.ResetColor();
+    Console.WriteLine(jweToken);
+    Console.WriteLine();
+
+    Console.WriteLine($"GET {secureUrl} with JWE token\n");
+    try
+    {
+        using var jweRequest = new HttpRequestMessage(HttpMethod.Get, secureUrl);
+        jweRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jweToken);
+        var jweResponse = await httpClient.SendAsync(jweRequest);
+        string jweResponseContent = await jweResponse.Content.ReadAsStringAsync();
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("Response:");
+        Console.ResetColor();
+        Console.WriteLine(jweResponseContent);
+    }
+    catch (Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Error calling Secure API with JWE token: {ex.Message}");
+        Console.ResetColor();
+    }
+    Console.WriteLine();
     Console.WriteLine("=== Testing Complete ===");
     Console.ResetColor();
 }
