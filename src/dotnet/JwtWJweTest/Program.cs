@@ -262,6 +262,7 @@ async Task MainAsync(string[] args)
     Console.WriteLine("Testing Secure API with JWE Token...");
     Console.ResetColor();
 
+    
     // Load the symmetric encryption key from keysDir/jwt_encryption_key.txt
     string encryptionKeyPath = Path.Combine(keysDir, "jwt_encryption_key.txt");
     if (!File.Exists(encryptionKeyPath))
@@ -271,22 +272,16 @@ async Task MainAsync(string[] args)
         Console.ResetColor();
         return;
     }
+    string encryptionKeyBase64 = File.ReadAllText(encryptionKeyPath).Trim();
 
-    string encryptionKey = File.ReadAllText(encryptionKeyPath).Trim();
-    // Convert the 64-character random string into bytes (UTF8)
-    byte[] fullKeyBytes = Encoding.UTF8.GetBytes(encryptionKey);
-    // Derive a 256-bit key (32 bytes) using SHA256
-    byte[] encryptionKeyBytes;
-    using (var sha256 = SHA256.Create())
-    {
-        encryptionKeyBytes = sha256.ComputeHash(fullKeyBytes); // SHA256 returns 32 bytes
-    }
+    // Use the Base64 key directly (API Management is expecting this key)
+    byte[] encryptionKeyBytes = Convert.FromBase64String(encryptionKeyBase64);
     var encryptionSecurityKey = new SymmetricSecurityKey(encryptionKeyBytes);
 
     // Create encrypting credentials (using AES256KW and AES128CBC-HMAC-SHA256)
     var encryptingCredentials = new EncryptingCredentials(
-        encryptionSecurityKey, 
-        SecurityAlgorithms.Aes256KW, 
+        encryptionSecurityKey,
+        SecurityAlgorithms.Aes256KW,
         SecurityAlgorithms.Aes128CbcHmacSha256);
 
     // Create a token descriptor for the JWE token with minimal claims

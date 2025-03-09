@@ -61,7 +61,7 @@ resource "random_string" "jwt_signing_key" {
 
 # Generate symmetric key for JWT encryption
 resource "random_string" "jwt_encryption_key" {
-  length  = 64
+  length  = 32
   special = false  # No special characters in the symmetric key
   upper   = true
   lower   = true
@@ -78,7 +78,7 @@ resource "local_file" "jwt_signing_key_file" {
 # Save the symmetric encryption key to a file
 resource "local_file" "jwt_encryption_key_file" {
   depends_on = [null_resource.create_keys_directory]
-  content    = random_string.jwt_encryption_key.result
+  content    = base64encode(random_string.jwt_encryption_key.result)
   filename   = "${local.keys_directory}/jwt_encryption_key.txt"
 }
 
