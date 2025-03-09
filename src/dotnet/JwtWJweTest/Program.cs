@@ -270,25 +270,23 @@ async Task MainAsync(string[] args)
         Console.WriteLine($"Error: Encryption key not found at {encryptionKeyPath}");
         Console.ResetColor();
         return;
-    }// Replace the existing encryption key handling in the JWE test section with the following code:
+    }
 
-string encryptionKey = File.ReadAllText(encryptionKeyPath).Trim();
-// Convert the 64-character random string into bytes (UTF8)
-byte[] fullKeyBytes = Encoding.UTF8.GetBytes(encryptionKey);
-// Derive a 16-byte key from the full key bytes using SHA256
-byte[] encryptionKeyBytes;
-using (var sha256 = SHA256.Create())
-{
-    var hash = sha256.ComputeHash(fullKeyBytes);
-    encryptionKeyBytes = new byte[16];
-    Array.Copy(hash, encryptionKeyBytes, 16);
-}
-var encryptionSecurityKey = new SymmetricSecurityKey(encryptionKeyBytes);
+    string encryptionKey = File.ReadAllText(encryptionKeyPath).Trim();
+    // Convert the 64-character random string into bytes (UTF8)
+    byte[] fullKeyBytes = Encoding.UTF8.GetBytes(encryptionKey);
+    // Derive a 256-bit key (32 bytes) using SHA256
+    byte[] encryptionKeyBytes;
+    using (var sha256 = SHA256.Create())
+    {
+        encryptionKeyBytes = sha256.ComputeHash(fullKeyBytes); // SHA256 returns 32 bytes
+    }
+    var encryptionSecurityKey = new SymmetricSecurityKey(encryptionKeyBytes);
 
-    // Create encrypting credentials (using AES128KW and AES128CBC-HMAC-SHA256)
+    // Create encrypting credentials (using AES256KW and AES128CBC-HMAC-SHA256)
     var encryptingCredentials = new EncryptingCredentials(
         encryptionSecurityKey, 
-        SecurityAlgorithms.Aes128KW, 
+        SecurityAlgorithms.Aes256KW, 
         SecurityAlgorithms.Aes128CbcHmacSha256);
 
     // Create a token descriptor for the JWE token with minimal claims
