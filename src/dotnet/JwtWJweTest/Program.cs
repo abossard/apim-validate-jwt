@@ -284,7 +284,10 @@ async Task MainAsync(string[] args)
         SecurityAlgorithms.Aes256KW,
         SecurityAlgorithms.Aes128CbcHmacSha256);
 
-    // Create a token descriptor for the JWE token with minimal claims
+    // Create signing credentials using the symmetric signing key (loaded earlier as 'symmetricKey')
+    var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey));
+    var signingCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
+
     var jweDescriptor = new SecurityTokenDescriptor
     {
         Issuer = issuer,
@@ -295,6 +298,7 @@ async Task MainAsync(string[] args)
             new Claim("scope", scope)
         }),
         Expires = DateTime.UtcNow.AddHours(1),
+        SigningCredentials = signingCredentials,
         EncryptingCredentials = encryptingCredentials
     };
 
