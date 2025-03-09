@@ -420,3 +420,18 @@ output "local_key_files" {
     "${local.keys_directory}/jwt_encryption_key.txt"
   ]
 }
+
+output "dotnet_run_command" {
+  description = "Command to run the JWT validation tool"
+  sensitive = true
+  value       = <<EOT
+cd ../src/dotnet/JwtWJweTest
+dotnet run -- --gateway-url=${azurerm_api_management.apim.gateway_url} \
+  --issuer=${azurerm_api_management_named_value.jwt_issuer.value} \
+  --audience=${azurerm_api_management_named_value.jwt_audience.value} \
+  --scope=${azurerm_api_management_named_value.jwt_required_scope.value} \
+  --signing-key-id=${local.jwt_signing_key_id} \
+  --encryption-key-id=${local.jwt_encryption_key_id} \
+  --keys-dir=${abspath(local.keys_directory)}
+EOT
+}
