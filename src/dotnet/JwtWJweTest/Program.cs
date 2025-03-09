@@ -264,19 +264,19 @@ await MainAsync(args);
 
 public class JwtHeader
 {
-    public string alg { get; set; }
-    public string typ { get; set; }
-    public string kid { get; set; }
+    public required string alg { get; set; }
+    public required string typ { get; set; }
+    public required string kid { get; set; }
 }
 
 public class JwtPayload
 {
-    public string iss { get; set; }
-    public string sub { get; set; }
-    public string aud { get; set; }
-    public string scope { get; set; }
-    public string name { get; set; }
-    public string[] roles { get; set; }
+    public required string iss { get; set; }
+    public required string sub { get; set; }
+    public required string aud { get; set; }
+    public required string scope { get; set; }
+    public required string name { get; set; }
+    public required string[] roles { get; set; }
     public long iat { get; set; }
     public long exp { get; set; }
 }
